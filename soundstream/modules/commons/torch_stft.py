@@ -6,7 +6,7 @@ import torch
 import warnings
 import numpy as np
 import torch.nn.functional as F
-from torch.cuda.amp import autocast, GradScaler
+from torch.amp import autocast
 
 
 from librosa.util import pad_center, tiny
