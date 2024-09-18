@@ -248,7 +248,7 @@ def reconstruction_loss(x, G_x, args, eps=1e-7, perceptual_weighting=True):
     n_mels = 80 # set for vocals
 
     # added 2048, 4096, 8192 n_fft values too for improving frequency resolution
-    for i in range(9, 14): #set to 8 for 
+    for i in range(9, 14): #set to 9 for vocals
         # apply optional A-weighting via FIR filter
         if perceptual_weighting:
             prefilter = FIRFilter(filter_type="aw", fs=args.sr)
