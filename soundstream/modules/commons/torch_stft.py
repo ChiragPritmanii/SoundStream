@@ -384,7 +384,7 @@ class TorchSTFT(torch.nn.Module):
             sample_rate=sample_rate) if mel_scale else None
         
     def transform(self, x):
-        with autocast(enabled=False):
+        with autocast(device_type="cuda", enabled=False):
             x = x.float()
             x_stft = torch.stft(x, self.fft_size, self.hop_size, self.win_size,
                                 self.window.type_as(x), normalized=self.normalized, return_complex=True)
