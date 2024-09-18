@@ -294,7 +294,7 @@ def reconstruction_loss(x, G_x, args, eps=1e-7, perceptual_weighting=True):
         tot_mel_loss = (lin_mel_loss + log_mel_loss + spec_conv_loss) / (i)
 
         L += tot_mel_loss
-        print(f"mel loss for frame size {n_fft}", tot_mel_loss)
+        # print(f"mel loss for frame size {n_fft}", tot_mel_loss)
     return L
 
 
