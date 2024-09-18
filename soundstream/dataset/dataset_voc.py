@@ -18,7 +18,7 @@ class SoundDataset(Dataset):
         fnames = list(data["name"])
 
         # create the path from fnames
-        self.filenames = map(lambda x: os.path.join(audio_dir, x + ".wav"), fnames)
+        self.filenames = list(map(lambda x: os.path.join(audio_dir, x + ".wav"), fnames))
         self.start_samples = list(data["start"])
         self.end_samples = list(data["end"])
 
