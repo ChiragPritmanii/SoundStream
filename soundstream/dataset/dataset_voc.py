@@ -15,7 +15,7 @@ class SoundDataset(Dataset):
         super().__init__()
         self.filenames = []
         data = pd.read_csv(audio_data)
-        fnames = list(data["fname"])
+        fnames = list(data["name"])
 
         # create the path from fnames
         self.filenames = map(lambda x: os.path.join(audio_dir, x + ".wav"), fnames)
