@@ -300,8 +300,12 @@ def reconstruction_loss(x, G_x, args, eps=1e-7, perceptual_weighting=True):
             )
             ** 0.5
         ).mean()
-
-        tot_mel_loss = (lin_mel_loss + log_mel_loss + spec_conv_loss) / (i)
+        # Alternative Approach: You might want to normalize the mel losses differently, 
+        # or even avoid scaling by i. If finer frequency resolutions (higher n_fft) are crucial for your task, 
+        # you could give them more weight instead of reducing their influence.
+        tot_mel_loss = (0.3*lin_mel_loss + 0.7*log_mel_loss + spec_conv_loss) / (i)
+        # Previous : 
+        # tot_mel_loss = (lin_mel_loss + log_mel_loss + spec_conv_loss) / (i)
 
         L += tot_mel_loss
         # print(f"mel loss for frame size {n_fft}", tot_mel_loss)
@@ -392,8 +396,8 @@ def loss_g(
         + args.LAMBDA_FEAT * feat_loss
         + args.LAMBDA_COM * codebook_loss
     )
-    # usual values -> rec_loss:50, feat_loss:3.5, adv_g_loss:1.5, codebook_loss (commit_loss):0.8
-    # loss weights to try: 1.5, 20, 50, 100 
+    # usual values -> rec_loss:50, feat_loss:6, adv_g_loss:1.5, codebook_loss (commit_loss):0.8
+    # loss weights to try: 1.5, 5, 5, 10 
     return loss, rec_loss, adv_g_loss, feat_loss, d_weight 
 
 
