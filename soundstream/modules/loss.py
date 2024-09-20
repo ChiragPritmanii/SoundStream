@@ -128,11 +128,14 @@ class SpectralConvergenceLoss(torch.nn.Module):
 
 def adversarial_g_loss(y_disc_gen):
     loss = 0.0
+    # calculate the loss on each output of generated audio from disc network
     for i in range(len(y_disc_gen)):
         # print(f"Adversarial Generator Loss; y_disc_gen[{i}] shape: ", y_disc_gen[i].shape)
         # assert 1==2
         stft_loss = F.relu(1 - y_disc_gen[i]).mean().squeeze()
         loss += stft_loss
+
+    # we're averaging the loss over the batch size
     return loss / len(y_disc_gen)
 
 
@@ -244,11 +247,17 @@ def reconstruction_loss(x, G_x, args, eps=1e-7, perceptual_weighting=True):
     # wav L1 loss; LAMBDA_WAV = 100 (loss weight for time domain comparison)
     L = 100 * F.mse_loss(x, G_x)
 
-    # n_mels = 128 # set for instrumentals  
-    n_mels = 80 # set for vocals
+    assert args.audio_type in ["vocals", "instrumentals"]
+    if args.audio_type == "vocals":
+        n_mels = 80
+        n_fft_pow = range(9, 13)
+    elif args.audio_type == "instrumentals":
+        n_mels = 128
+        n_fft_pow = range(10, 14)
 
+    # comparing from coarse to fine frequency resolution
     # added 2048, 4096, 8192 n_fft values too for improving frequency resolution
-    for i in range(9, 14): #set to 9 for vocals
+    for i in n_fft_pow:  # set to 9 for vocals
         # apply optional A-weighting via FIR filter
         if perceptual_weighting:
             prefilter = FIRFilter(filter_type="aw", fs=args.sr)
@@ -302,6 +311,7 @@ def reconstruction_loss(x, G_x, args, eps=1e-7, perceptual_weighting=True):
 def criterion_d(y_disc_r, y_disc_gen, fmap_r_det, fmap_gen_det):
     loss = 0.0
     loss_f = feature_loss(fmap_r_det, fmap_gen_det)
+    # hinge_loss varaint 
     for i in range(len(y_disc_r)):
         loss += F.relu(1 - y_disc_r[i]).mean() + F.relu(1 + y_disc_gen[i]).mean()
     return loss / len(y_disc_gen) + 0.0 * loss_f
@@ -363,6 +373,7 @@ def loss_g(
     rec_loss = reconstruction_loss(
         inputs.contiguous(), reconstructions.contiguous(), args
     )
+    # adv_g_loss is the loss calculated over the output representation of the generated audio from the discriminator
     adv_g_loss = adversarial_g_loss(y_disc_gen)
     feat_loss = feature_loss(fmap_r, fmap_gen) + sim_loss(y_disc_r, y_disc_gen)  #
     d_weight = torch.tensor(1.0)
@@ -381,7 +392,9 @@ def loss_g(
         + args.LAMBDA_FEAT * feat_loss
         + args.LAMBDA_COM * codebook_loss
     )
-    return loss, rec_loss, adv_g_loss, feat_loss, d_weight
+    # usual values -> rec_loss:50, feat_loss:3.5, adv_g_loss:1.5, codebook_loss (commit_loss):0.8
+    # loss weights to try: 1.5, 20, 50, 100 
+    return loss, rec_loss, adv_g_loss, feat_loss, d_weight 
 
 
 def loss_dis(y_disc_r_det, y_disc_gen_det, fmap_r_det, fmap_gen_det, global_step, args):

@@ -1,3 +1,5 @@
+# [ADD ISSUE: Replace the Dataset with WebDataset]
+
 import os
 import time
 import random
@@ -14,7 +16,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 
 from soundstream.distributed.launch import launch
 from soundstream.models.soundstream import SoundStream
-from soundstream.dataset.dataset_voc import SoundDataset
+from soundstream.dataset.dataset import SoundDataset
 from soundstream.modules.loss import criterion_d
 from soundstream.modules.loss import criterion_g
 from soundstream.modules.loss import loss_dis
@@ -127,6 +129,12 @@ def get_args():
     parser.add_argument("--sr", type=int, default=16000, help="sample rate")
     parser.add_argument("--print_freq", type=int, default=10, help="the print number")
     parser.add_argument("--save_dir", type=str, default="log", help="log save path")
+    parser.add_argument(
+        "--audio_type",
+        type=str,
+        default="vocals",
+        help="possible values [vocals, instrumentals]",
+    )
     parser.add_argument(
         "--train_csv", type=str, default="path_to_csv", help="train data"
     )
@@ -267,8 +275,16 @@ def main_worker(local_rank, args):
         )  # device_ids=[args.local_rank], output_device=args.local_rank
         mfd = DDP(mfd, device_ids=[args.local_rank], find_unused_parameters=True)
 
-    train_dataset = SoundDataset(audio_data=args.train_csv, audio_dir=args.train_data_path)
-    valid_dataset = SoundDataset(audio_data=args.valid_csv, audio_dir=args.valid_data_path)
+    train_dataset = SoundDataset(
+        audio_type=args.audio_type,
+        audio_data=args.train_csv,
+        audio_dir=args.train_data_path,
+    )
+    valid_dataset = SoundDataset(
+        audio_type=args.audio_type,
+        audio_data=args.valid_csv,
+        audio_dir=args.valid_data_path,
+    )
     # args.sr = train_dataset.sr
 
     if args.distributed:
@@ -403,6 +419,8 @@ def train(
                     optimizer_d.zero_grad()
                     loss_d.backward()
                     optimizer_d.step()
+            # log at step level
+            # at each step we get the average loss of the batch (check line 288)
             message = "<epoch:{:d}, iter:{:d}, step:{:d}, total_loss_g:{:.4f}, adv_g_loss:{:.4f}, feat_loss:{:.4f}, rec_loss:{:.4f}, commit_loss:{:.4f}, loss_d:{:.4f}, d_weight: {:.4f}>".format(
                 epoch,
                 k_iter,
@@ -569,7 +587,7 @@ def train(
             train_loss_d / len(train_loader),
         )
 
-        # made changes here, average out the total losses before logging
+        # made changes here, average out the total losses over all batches before logging
         logger.add_scalar(
             **{
                 "tag": "total_loss_g_train/epoch",
