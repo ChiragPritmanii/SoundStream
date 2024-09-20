@@ -11,16 +11,18 @@ from torchaudio.transforms import Resample
 class SoundDataset(Dataset):
     """Dataset to load the audio data"""
 
-    def __init__(self, audio_data, audio_dir):
+    def __init__(self, audio_type, audio_data, audio_dir):
         super().__init__()
+        self.audio_type = audio_type
         self.filenames = []
         data = pd.read_csv(audio_data)
-        fnames = list(data["name"])
+        filenames = list(data["name"])
 
         # create the path from fnames
-        self.filenames = list(map(lambda x: os.path.join(audio_dir, x), fnames))
-        self.start_samples = list(data["start"])
-        self.end_samples = list(data["end"])
+        self.filenames = list(map(lambda x: os.path.join(audio_dir, x), filenames))
+        if self.audio_type=="vocals":
+            self.start_samples = list(data["start"])
+            self.end_samples = list(data["end"])
 
         print(f"Total files: {len(self.filenames)}")
 
@@ -32,9 +34,7 @@ class SoundDataset(Dataset):
 
     def __getitem__(self, index):
         filename = self.filenames[index]
-        start_sample = self.start_samples[index]
-        end_sample = self.end_samples[index]
-
+        
         wav, sr = torchaudio.load(filename, backend="ffmpeg")
 
         assert (
@@ -50,7 +50,11 @@ class SoundDataset(Dataset):
         wav = transform(wav)
 
         # slice the audio based on start and end samples
-        wav = wav[:, start_sample:end_sample]
+        # if audio_type is vocals
+        if self.audio_type=="vocals":
+            start_sample = self.start_samples[index]
+            end_sample = self.end_samples[index]
+            wav = wav[:, start_sample:end_sample]
 
         wav_len = wav.size(1)
 
