@@ -301,6 +301,8 @@ def main_worker(local_rank, args):
         shuffle=True,
         num_workers=8,
         sampler=train_sampler,
+        pin_memory=True,
+        prefetch_factor=4
     )
     valid_loader = torch.utils.data.DataLoader(
         valid_dataset,
@@ -308,6 +310,8 @@ def main_worker(local_rank, args):
         shuffle=True,
         num_workers=8,
         sampler=valid_sampler,
+        pin_memory=True,
+        prefetch_factor=4
     )
     print("Shuffle Activated")
     optimizer_g = torch.optim.AdamW(soundstream.parameters(), lr=3e-4, betas=(0.5, 0.9))
@@ -516,6 +520,7 @@ def train(
                 torchaudio.save(
                     filename, random_train_wav.detach().cpu(), sample_rate=16000
                 )
+                print("Devices on which inference audios are:",random_train_wav.device)
 
                 # get a sample from a valid batch data
                 filename = f"{args.save_results_dir}/sample_valid_gt_{global_step}.wav"
@@ -530,6 +535,7 @@ def train(
                     filename, random_valid_wav.detach().cpu(), sample_rate=16000
                 )
 
+                print("Devices on which inference audios are:",random_valid_wav.device)
                 # set soundstream to eval
                 soundstream.eval()
 
