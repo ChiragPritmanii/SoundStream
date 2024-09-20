@@ -520,6 +520,7 @@ def train(
                 torchaudio.save(
                     filename, random_train_wav.detach().cpu(), sample_rate=16000
                 )
+                print("Devices on which inference audios are:",random_train_wav.device)
 
                 # get a sample from a valid batch data
                 filename = f"{args.save_results_dir}/sample_valid_gt_{global_step}.wav"
@@ -534,7 +535,7 @@ def train(
                     filename, random_valid_wav.detach().cpu(), sample_rate=16000
                 )
 
-                print("Devices on which inference audios are:",random_train_wav.device, random_valid_wav)
+                print("Devices on which inference audios are:",random_valid_wav.device)
                 # set soundstream to eval
                 soundstream.eval()
 
