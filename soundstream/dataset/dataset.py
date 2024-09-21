@@ -44,15 +44,37 @@ class SoundDataset(Dataset):
         ), f"one of your audio file ({filename}) is empty. please remove it from your folder"
 
         # mean and resample operations on full audios are time expensive
-        # randomly select 30 seconds of instrumental audio, and then perform the mean and resample ops
-        # the same can't be don for vocals because we have a start and end sample specified there
-        # we can directly select the 1.5 second clip too
+        # we are directly selecting the 1.5 second clip, and then perform the mean and resample ops
+        # the same can be done for vocals too but first we need to convert the start and end sample at 16kHz(target_sr) to 44.1kHz(sr)
         if self.audio_type == "instrumentals":
-            wav_dur = wav.size(1) // sr
-            if wav_dur > 30:
-                max_start = wav_dur - 30
+            wav_len = wav.size(1)  # 44100*n
+            seg_dur = self.max_len / self.target_sr  # 1.5
+            seg_size = int(sr * seg_dur)  # 66150
+            if wav_len > seg_size:
+                max_start = wav_len - seg_size
                 start = torch.randint(0, max_start, (1,))
-                wav = wav[:, start * sr : (start + 30) * sr]
+                wav = wav[:, start : start + seg_size]
+            else:
+                wav = F.pad(wav, (0, seg_size - wav_len), "constant")
+
+        elif self.audio_type == "vocals":
+            start_sample = self.start_samples[index]
+            start_sample = (start_sample * sr) // 16000
+
+            end_sample = self.end_samples[index]
+            end_sample = (end_sample * sr) // 16000
+
+            wav = wav[:, start_sample:end_sample]
+
+            wav_len = wav.size(1)  # 44100*n
+            seg_dur = self.max_len / self.target_sr  # 1.5
+            seg_size = int(sr * seg_dur)  # 66150
+            if wav_len > seg_size:
+                max_start = wav_len - seg_size
+                start = torch.randint(0, max_start, (1,))
+                wav = wav[:, start : start + seg_size]
+            else:
+                wav = F.pad(wav, (0, seg_size - wav_len), "constant")
 
         # convert to mono
         if wav.size(0) > 1:
@@ -63,21 +85,4 @@ class SoundDataset(Dataset):
         # OR
         # transform = Resample(orig_freq=sr, new_freq=self.target_sr)
         # wav = transform(wav)
-
-        # slice the audio based on start and end samples
-        # if audio_type is vocals
-        if self.audio_type == "vocals":
-            start_sample = self.start_samples[index]
-            end_sample = self.end_samples[index]
-            wav = wav[:, start_sample:end_sample]
-
-        wav_len = wav.size(1)
-
-        # select a random clip from the audio
-        if wav_len > self.max_len:
-            max_start = wav_len - self.max_len
-            start = torch.randint(0, max_start, (1,))
-            wav = wav[:, start : start + self.max_len]
-        else:
-            wav = F.pad(wav, (0, self.max_len - wav_len), "constant")
         return wav

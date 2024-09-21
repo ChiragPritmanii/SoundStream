@@ -396,8 +396,9 @@ def loss_g(
         + args.LAMBDA_FEAT * feat_loss
         + args.LAMBDA_COM * codebook_loss
     )
-    # usual values -> rec_loss:50, feat_loss:6, adv_g_loss:1.5, codebook_loss (commit_loss):0.8
-    # loss weights to try: 1.5, 5, 5, 10 
+    # latest loss weights based on this chat - https://chatgpt.com/share/66ee0355-cfa0-8000-b64d-253ed6a53d6a
+    # usual values for ins -> rec_loss:50, feat_loss:6, adv_g_loss:1.5, codebook_loss (commit_loss):0.8
+    # loss weights for ins -> 1.5, 5, 5, 10 (focus should stay on recon majorly) 
     return loss, rec_loss, adv_g_loss, feat_loss, d_weight 
 
 
