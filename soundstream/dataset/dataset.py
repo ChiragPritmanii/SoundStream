@@ -81,7 +81,7 @@ class SoundDataset(Dataset):
             wav = wav.mean(dim=0, keepdim=True)
 
         # resample data to the target_sr
-        wav = resample(wav, orig_freq=sr, new_freq=self.target_sr)
+        wav = resample(wav, orig_freq=sr, new_freq=self.target_sr) # this offers more speed
         # OR
         # transform = Resample(orig_freq=sr, new_freq=self.target_sr)
         # wav = transform(wav)
