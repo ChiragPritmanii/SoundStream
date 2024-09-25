@@ -326,9 +326,9 @@ def main_worker(local_rank, args):
     )
     print("Shuffle Activated")
 
-    optimizer_g = torch.optim.AdamW(soundstream.parameters(), lr=4e-4, eps=1e-6, betas=(0.8, 0.99), weight_decay = 0.01)
+    optimizer_g = torch.optim.AdamW(soundstream.parameters(), lr=2e-4, eps=1e-6, betas=(0.8, 0.99), weight_decay = 0.01)
     lr_scheduler_g = torch.optim.lr_scheduler.ExponentialLR(optimizer_g, gamma=0.999)
-    optimizer_d = torch.optim.AdamW(mfd.parameters(), lr=6e-4, eps=1e-6, betas=(0.8, 0.99), weight_decay = 0.01)
+    optimizer_d = torch.optim.AdamW(mfd.parameters(), lr=3e-4, eps=1e-6, betas=(0.8, 0.99), weight_decay = 0.01)
     lr_scheduler_d = torch.optim.lr_scheduler.ExponentialLR(optimizer_d, gamma=0.999)
     if args.resume:
         latest_info = torch.load(os.path.join(args.resume_path, args.resume_ckpt))
@@ -420,7 +420,7 @@ def train(
             if global_step == disc_warmup_step:
                 print(f"Unfreezing the generator at {global_step}")
                 soundstream.unfreeze_generator()
-                optimizer_g = torch.optim.AdamW(soundstream.parameters(), lr=2e-4, eps=1e-6, betas=(0.8, 0.99), weight_decay = 0.01)
+                optimizer_g = torch.optim.AdamW(soundstream.parameters(), lr=4e-4, eps=1e-6, betas=(0.8, 0.99), weight_decay = 0.01)
                 lr_scheduler_g = torch.optim.lr_scheduler.ExponentialLR(
                     optimizer_g, gamma=0.999
                 )
