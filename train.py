@@ -487,8 +487,8 @@ def train(
             message = "<epoch:{:d}, iter:{:d}, step:{:d}, lr_d: {:.4f}, lr_g: {:.4f}, total_loss_g:{:.4f}, adv_g_loss:{:.4f}, feat_loss:{:.4f}, rec_loss:{:.4f}, commit_loss:{:.4f}, w_loss_d:{:.4f}, loss_d:{:.4f}, d_weight: {:.4f}>".format(
                 epoch,
                 k_iter,
-                lr_scheduler_d.get_last_lr(),
-                lr_scheduler_g.get_last_lr(),
+                lr_scheduler_d.get_last_lr()[0],
+                lr_scheduler_g.get_last_lr()[0],
                 global_step,
                 total_loss_g.item(),
                 adv_g_loss.item(),
@@ -511,14 +511,14 @@ def train(
             logger.add_scalar(
                 **{
                     "tag": "lr_d/steps",
-                    "scalar_value": lr_scheduler_d.get_last_lr(),
+                    "scalar_value": lr_scheduler_d.get_last_lr()[0],
                     "global_step": global_step,
                 }
             )
             logger.add_scalar(
                 **{
                     "tag": "lr_g/steps",
-                    "scalar_value": lr_scheduler_g.get_last_lr(),
+                    "scalar_value": lr_scheduler_g.get_last_lr()[0],
                     "global_step": global_step,
                 }
             )
