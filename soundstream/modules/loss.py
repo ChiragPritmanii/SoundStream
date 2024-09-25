@@ -253,7 +253,7 @@ def reconstruction_loss(x, G_x, args, eps=1e-7, perceptual_weighting=True):
         n_fft_pow = range(9, 13)
     elif args.audio_type == "instrumentals":
         n_mels = 128
-        n_fft_pow = range(10, 14)
+        n_fft_pow = range(9, 14)
 
     # comparing from coarse to fine frequency resolution
     # added 2048, 4096, 8192 n_fft values too for improving frequency resolution
