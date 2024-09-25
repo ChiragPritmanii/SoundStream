@@ -339,7 +339,7 @@ def main_worker(local_rank, args):
             soundstream.freeze_generator()
         # if custom_lr then use the custom set lr for both generaor and discriminator
         if args.use_custom_lr == True:
-            print(f"using custom lr: {lr_scheduler_g.get_lr()}")
+            print(f"using custom lr: {lr_scheduler_g.get_lr()[0]}")
             # optimizer_g = torch.optim.AdamW(
             #     soundstream.parameters(), lr=3e-4, betas=(0.5, 0.9)
             # )
@@ -356,7 +356,7 @@ def main_worker(local_rank, args):
             lr_scheduler_g.load_state_dict(latest_info["lr_scheduler_g"])
             optimizer_d.load_state_dict(latest_info["optimizer_d"])
             lr_scheduler_d.load_state_dict(latest_info["lr_scheduler_d"])
-            print(f"using saved model lr: {lr_scheduler_g.get_lr()}")
+            print(f"using saved model lr: {lr_scheduler_g.get_lr()[0]}")
     train(
         args,
         soundstream,
@@ -459,7 +459,6 @@ def train(
 
                     # if disc_warmup is unset then it take -1 value
                     if global_step >= disc_warmup_step:
-                        print("Starting Optimizing Generator")
                         optimizer_g.zero_grad()  # Clear gradients for the generator optimizer
                         total_loss_g.backward()  # Backpropagate the loss
                         optimizer_g.step()  # Update generator parameters
