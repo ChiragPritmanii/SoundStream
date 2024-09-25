@@ -94,10 +94,12 @@ class SoundStream(nn.Module):
             param.requires_grad = False
 
     def freeze_generator(self):
+        print("freezed soundstream weights")
         for param in self.parameters():
             param.requires_grad = False
 
     def unfreeze_generator(self):
+        print("unfreezed soundstream weights")
         for param in self.parameters():
             param.requires_grad = True
 

@@ -326,17 +326,27 @@ def main_worker(local_rank, args):
         prefetch_factor=4,
     )
     print("Shuffle Activated")
-    optimizer_g = torch.optim.AdamW(soundstream.parameters(), lr=3e-4, betas=(0.5, 0.9))
-    lr_scheduler_g = torch.optim.lr_scheduler.ExponentialLR(optimizer_g, gamma=0.999)
-    optimizer_d = torch.optim.AdamW(mfd.parameters(), lr=3e-4, betas=(0.5, 0.9))
-    lr_scheduler_d = torch.optim.lr_scheduler.ExponentialLR(optimizer_d, gamma=0.999)
+
     if args.resume:
         latest_info = torch.load(os.path.join(args.resume_path, args.resume_ckpt))
         args.st_epoch = latest_info["epoch"]
         soundstream.load_state_dict(latest_info["codec_model"], strict=False)
         mfd.load_state_dict(latest_info["mfd"])
+        if args.warm_up_disc_steps > 0:
+            soundstream.freeze_generator()
         # if custom_lr then use the custom set lr for both generaor and discriminator
         if args.use_custom_lr:
+            print(f"using custom lr: {lr_scheduler_g.get_lr()}")
+            optimizer_g = torch.optim.AdamW(
+                soundstream.parameters(), lr=3e-4, betas=(0.5, 0.9)
+            )
+            lr_scheduler_g = torch.optim.lr_scheduler.ExponentialLR(
+                optimizer_g, gamma=0.999
+            )
+            optimizer_d = torch.optim.AdamW(mfd.parameters(), lr=3e-4, betas=(0.5, 0.9))
+            lr_scheduler_d = torch.optim.lr_scheduler.ExponentialLR(
+                optimizer_d, gamma=0.999
+            )
             pass
         # if not then load from state_dict
         else:
@@ -344,6 +354,7 @@ def main_worker(local_rank, args):
             lr_scheduler_g.load_state_dict(latest_info["lr_scheduler_g"])
             optimizer_d.load_state_dict(latest_info["optimizer_d"])
             lr_scheduler_d.load_state_dict(latest_info["lr_scheduler_d"])
+            print(f"using saved model lr: {lr_scheduler_g.get_lr()}")
     train(
         args,
         soundstream,
@@ -382,8 +393,9 @@ def train(
         soundstream.freeze_encoder()
 
     if args.warm_up_disc_steps > 0:
-        soundstream.freeze_generator()
         disc_warmup_step = global_step + args.warm_up_disc_steps
+    else:
+        disc_warmup_step = -1
 
     for epoch in range(args.st_epoch, args.N_EPOCHS + 1):
         soundstream.train()
@@ -396,23 +408,22 @@ def train(
         train_loss_g = 0.0
         train_commit_loss = 0.0
         k_iter = 0
+
         if args.distributed:
             train_loader.sampler.set_epoch(epoch)
+
         for x in tqdm(train_loader):
             x = x.to(args.device)
 
             if global_step == disc_warmup_step:
+                print("Unfreezing the generator at {global_step}")
                 soundstream.unfreeze_generator()
                 optimizer_g = torch.optim.AdamW(
                     soundstream.parameters(), lr=3e-4, betas=(0.5, 0.9)
                 )
-                if args.use_custom_lr:
-                    pass
-                else:
-                    latest_info = torch.load(
-                        os.path.join(args.resume_path, args.resume_ckpt)
-                    )
-                    optimizer_g.load_state_dict(latest_info["optimizer_g"])
+                lr_scheduler_g = torch.optim.lr_scheduler.ExponentialLR(
+                    optimizer_g, gamma=0.999
+                )
 
             for optimizer_idx in [0, 1]:  # we have two optimizer
                 x_wav = get_input(x)
@@ -444,9 +455,12 @@ def train(
                     train_feat_loss += feat_loss.item()
                     train_rec_loss += rec_loss.item()
 
-                    optimizer_g.zero_grad()
-                    total_loss_g.backward()
-                    optimizer_g.step()
+                    # if disc_warmup is unset then it take -1 value
+                    if global_step >= disc_warmup_step:
+                        optimizer_g.zero_grad()  # Clear gradients for the generator optimizer
+                        total_loss_g.backward()  # Backpropagate the loss
+                        optimizer_g.step()  # Update generator parameters
+                        lr_scheduler_g.step()  # Step the learning rate scheduler
                 else:
                     # update discriminator
                     # MFD
@@ -459,14 +473,19 @@ def train(
                     )
                     train_w_loss_d += w_loss_d.item()
                     train_loss_d += loss_d.item()
+
                     optimizer_d.zero_grad()
                     loss_d.backward()
                     optimizer_d.step()
+                    lr_scheduler_d.step()
+
             # log at step level
             # at each step we get the average loss of the batch (check line 288)
-            message = "<epoch:{:d}, iter:{:d}, step:{:d}, total_loss_g:{:.4f}, adv_g_loss:{:.4f}, feat_loss:{:.4f}, rec_loss:{:.4f}, commit_loss:{:.4f}, w_loss_d:{:.4f}, loss_d:{:.4f}, d_weight: {:.4f}>".format(
+            message = "<epoch:{:d}, iter:{:d}, step:{:d}, lr_d: {:.4f}, lr_g: {:.4f}, total_loss_g:{:.4f}, adv_g_loss:{:.4f}, feat_loss:{:.4f}, rec_loss:{:.4f}, commit_loss:{:.4f}, w_loss_d:{:.4f}, loss_d:{:.4f}, d_weight: {:.4f}>".format(
                 epoch,
                 k_iter,
+                lr_scheduler_d.get_last_lr(),
+                lr_scheduler_g.get_last_lr(),
                 global_step,
                 total_loss_g.item(),
                 adv_g_loss.item(),
@@ -483,6 +502,20 @@ def train(
                 **{
                     "tag": "epoch/steps",
                     "scalar_value": epoch,
+                    "global_step": global_step,
+                }
+            )
+            logger.add_scalar(
+                **{
+                    "tag": "lr_d/steps",
+                    "scalar_value": lr_scheduler_d.get_last_lr(),
+                    "global_step": global_step,
+                }
+            )
+            logger.add_scalar(
+                **{
+                    "tag": "lr_g/steps",
+                    "scalar_value": lr_scheduler_g.get_last_lr(),
                     "global_step": global_step,
                 }
             )
@@ -624,9 +657,6 @@ def train(
             k_iter += 1
             # next batch/step overall
             global_step += 1  # record the global step
-
-        lr_scheduler_g.step()
-        lr_scheduler_d.step()
 
         # for logging at epoch level
         message = "<epoch:{:d}, step:{:d}, <total_loss_g_train:{:.4f}, recon_loss_train:{:.4f}, adversarial_loss_train:{:.4f}, feature_loss_train:{:.4f}, commit_loss_train:{:.4f}, w_loss_d_train:{:.4f}, loss_d_train:{:.4f}>".format(
