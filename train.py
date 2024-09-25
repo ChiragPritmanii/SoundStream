@@ -180,9 +180,8 @@ def get_args():
     )
     parser.add_argument(
         "--use_custom_lr",
-        type=bool,
-        default=True,
-        help="use_custom_lr",
+        action="store_true",
+        help="use a custom lr, not the one from save checkpoint",
     )
     parser.add_argument(
         "--warm_up_disc_steps",
@@ -339,7 +338,7 @@ def main_worker(local_rank, args):
         if args.warm_up_disc_steps > 0:
             soundstream.freeze_generator()
         # if custom_lr then use the custom set lr for both generaor and discriminator
-        if args.use_custom_lr==True:
+        if args.use_custom_lr == True:
             print(f"using custom lr: {lr_scheduler_g.get_lr()}")
             # optimizer_g = torch.optim.AdamW(
             #     soundstream.parameters(), lr=3e-4, betas=(0.5, 0.9)
@@ -419,7 +418,7 @@ def train(
             x = x.to(args.device)
 
             if global_step == disc_warmup_step:
-                print("Unfreezing the generator at {global_step}")
+                print(f"Unfreezing the generator at {global_step}")
                 soundstream.unfreeze_generator()
                 optimizer_g = torch.optim.AdamW(
                     soundstream.parameters(), lr=3e-4, betas=(0.5, 0.9)
@@ -484,7 +483,7 @@ def train(
 
             # log at step level
             # at each step we get the average loss of the batch (check line 288)
-            message = "<epoch:{:d}, iter:{:d}, step:{:d}, lr_d: {:.4f}, lr_g: {:.4f}, total_loss_g:{:.4f}, adv_g_loss:{:.4f}, feat_loss:{:.4f}, rec_loss:{:.4f}, commit_loss:{:.4f}, w_loss_d:{:.4f}, loss_d:{:.4f}, d_weight: {:.4f}>".format(
+            message = "<epoch:{:d}, iter:{:d}, step:{:d}, lr_d: {:.6f}, lr_g: {:.6f}, total_loss_g:{:.4f}, adv_g_loss:{:.4f}, feat_loss:{:.4f}, rec_loss:{:.4f}, commit_loss:{:.4f}, w_loss_d:{:.4f}, loss_d:{:.4f}, d_weight: {:.4f}>".format(
                 epoch,
                 k_iter,
                 global_step,
