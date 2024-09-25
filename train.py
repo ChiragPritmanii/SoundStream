@@ -459,6 +459,7 @@ def train(
 
                     # if disc_warmup is unset then it take -1 value
                     if global_step >= disc_warmup_step:
+                        print("Starting Optimizing Generator")
                         optimizer_g.zero_grad()  # Clear gradients for the generator optimizer
                         total_loss_g.backward()  # Backpropagate the loss
                         optimizer_g.step()  # Update generator parameters
