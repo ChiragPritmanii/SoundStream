@@ -337,6 +337,7 @@ def criterion_g(commit_loss, x, G_x, fmap_r, fmap_gen, y_disc_r, y_disc_gen, arg
 
 
 def adopt_weight(weight, global_step, threshold=0, value=0.0):
+    # global step is always greater than thresh if we resume from a ckpt
     if global_step < threshold:
         weight = value
     return weight
@@ -406,7 +407,10 @@ def loss_dis(y_disc_r_det, y_disc_gen_det, fmap_r_det, fmap_gen_det, global_step
     disc_factor = adopt_weight(
         args.LAMBDA_ADV, global_step, threshold=args.discriminator_iter_start
     )
-    d_loss = disc_factor * criterion_d(
+    # we only logged the weighted disc loss earlier
+    # made changes so we can log the weighted and un-weighted disc loss values 
+    d_loss = criterion_d(
         y_disc_r_det, y_disc_gen_det, fmap_r_det, fmap_gen_det
     )
-    return d_loss
+    weighted_d_loss = disc_factor * d_loss
+    return weighted_d_loss, d_loss

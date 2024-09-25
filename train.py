@@ -179,6 +179,18 @@ def get_args():
         help="target_bandwidths of net3.py",
     )
     parser.add_argument(
+        "--use_custom_lr",
+        type=bool,
+        default=True,
+        help="use_custom_lr",
+    )
+    parser.add_argument(
+        "--warm_up_disc_steps",
+        type=int,
+        default=1000,
+        help="warm_up_disc_steps",
+    )
+    parser.add_argument(
         "--config_path",
         type=str,
         default="path_to_architecture_config",
@@ -302,7 +314,7 @@ def main_worker(local_rank, args):
         num_workers=8,
         sampler=train_sampler,
         pin_memory=True,
-        prefetch_factor=4
+        prefetch_factor=4,
     )
     valid_loader = torch.utils.data.DataLoader(
         valid_dataset,
@@ -311,7 +323,7 @@ def main_worker(local_rank, args):
         num_workers=8,
         sampler=valid_sampler,
         pin_memory=True,
-        prefetch_factor=4
+        prefetch_factor=4,
     )
     print("Shuffle Activated")
     optimizer_g = torch.optim.AdamW(soundstream.parameters(), lr=3e-4, betas=(0.5, 0.9))
@@ -323,10 +335,15 @@ def main_worker(local_rank, args):
         args.st_epoch = latest_info["epoch"]
         soundstream.load_state_dict(latest_info["codec_model"], strict=False)
         mfd.load_state_dict(latest_info["mfd"])
-        optimizer_g.load_state_dict(latest_info["optimizer_g"])
-        lr_scheduler_g.load_state_dict(latest_info["lr_scheduler_g"])
-        optimizer_d.load_state_dict(latest_info["optimizer_d"])
-        lr_scheduler_d.load_state_dict(latest_info["lr_scheduler_d"])
+        # if custom_lr then use the custom set lr for both generaor and discriminator
+        if args.use_custom_lr:
+            pass
+        # if not then load from state_dict
+        else:
+            optimizer_g.load_state_dict(latest_info["optimizer_g"])
+            lr_scheduler_g.load_state_dict(latest_info["lr_scheduler_g"])
+            optimizer_d.load_state_dict(latest_info["optimizer_d"])
+            lr_scheduler_d.load_state_dict(latest_info["lr_scheduler_d"])
     train(
         args,
         soundstream,
@@ -364,10 +381,15 @@ def train(
     if args.freeze_encoder:
         soundstream.freeze_encoder()
 
+    if args.warm_up_disc_steps > 0:
+        soundstream.freeze_generator()
+        disc_warmup_step = global_step + args.warm_up_disc_steps
+
     for epoch in range(args.st_epoch, args.N_EPOCHS + 1):
         soundstream.train()
         mfd.train()
         train_loss_d = 0.0
+        train_w_loss_d = 0.0
         train_adv_g_loss = 0.0
         train_feat_loss = 0.0
         train_rec_loss = 0.0
@@ -378,9 +400,24 @@ def train(
             train_loader.sampler.set_epoch(epoch)
         for x in tqdm(train_loader):
             x = x.to(args.device)
+
+            if global_step == disc_warmup_step:
+                soundstream.unfreeze_generator()
+                optimizer_g = torch.optim.AdamW(
+                    soundstream.parameters(), lr=3e-4, betas=(0.5, 0.9)
+                )
+                if args.use_custom_lr:
+                    pass
+                else:
+                    latest_info = torch.load(
+                        os.path.join(args.resume_path, args.resume_ckpt)
+                    )
+                    optimizer_g.load_state_dict(latest_info["optimizer_g"])
+
             for optimizer_idx in [0, 1]:  # we have two optimizer
                 x_wav = get_input(x)
                 G_x, commit_loss, last_layer = soundstream(x_wav)
+
                 if optimizer_idx == 0:
                     # update generator
                     # MFD
@@ -406,6 +443,7 @@ def train(
                     train_adv_g_loss += adv_g_loss.item()
                     train_feat_loss += feat_loss.item()
                     train_rec_loss += rec_loss.item()
+
                     optimizer_g.zero_grad()
                     total_loss_g.backward()
                     optimizer_g.step()
@@ -416,16 +454,17 @@ def train(
                         x.detach(), G_x.detach()
                     )
 
-                    loss_d = loss_dis(
+                    w_loss_d, loss_d = loss_dis(
                         y_df_hat_r, y_df_hat_g, fmap_f_r, fmap_f_g, global_step, args
                     )
+                    train_w_loss_d += w_loss_d.item()
                     train_loss_d += loss_d.item()
                     optimizer_d.zero_grad()
                     loss_d.backward()
                     optimizer_d.step()
             # log at step level
             # at each step we get the average loss of the batch (check line 288)
-            message = "<epoch:{:d}, iter:{:d}, step:{:d}, total_loss_g:{:.4f}, adv_g_loss:{:.4f}, feat_loss:{:.4f}, rec_loss:{:.4f}, commit_loss:{:.4f}, loss_d:{:.4f}, d_weight: {:.4f}>".format(
+            message = "<epoch:{:d}, iter:{:d}, step:{:d}, total_loss_g:{:.4f}, adv_g_loss:{:.4f}, feat_loss:{:.4f}, rec_loss:{:.4f}, commit_loss:{:.4f}, w_loss_d:{:.4f}, loss_d:{:.4f}, d_weight: {:.4f}>".format(
                 epoch,
                 k_iter,
                 global_step,
@@ -434,6 +473,7 @@ def train(
                 feat_loss.item(),
                 rec_loss.item(),
                 commit_loss.item(),
+                w_loss_d.item(),
                 loss_d.item(),
                 d_weight.item(),
             )
@@ -483,6 +523,13 @@ def train(
             )
             logger.add_scalar(
                 **{
+                    "tag": "w_loss_d/step",
+                    "scalar_value": w_loss_d,
+                    "global_step": global_step,
+                }
+            )
+            logger.add_scalar(
+                **{
                     "tag": "loss_d/step",
                     "scalar_value": loss_d,
                     "global_step": global_step,
@@ -520,7 +567,7 @@ def train(
                 torchaudio.save(
                     filename, random_train_wav.detach().cpu(), sample_rate=16000
                 )
-                print("Devices on which inference audios are:",random_train_wav.device)
+                print("Devices on which inference audios are:", random_train_wav.device)
 
                 # get a sample from a valid batch data
                 filename = f"{args.save_results_dir}/sample_valid_gt_{global_step}.wav"
@@ -535,7 +582,7 @@ def train(
                     filename, random_valid_wav.detach().cpu(), sample_rate=16000
                 )
 
-                print("Devices on which inference audios are:",random_valid_wav.device)
+                print("Devices on which inference audios are:", random_valid_wav.device)
                 # set soundstream to eval
                 soundstream.eval()
 
@@ -582,7 +629,7 @@ def train(
         lr_scheduler_d.step()
 
         # for logging at epoch level
-        message = "<epoch:{:d}, step:{:d}, <total_loss_g_train:{:.4f}, recon_loss_train:{:.4f}, adversarial_loss_train:{:.4f}, feature_loss_train:{:.4f}, commit_loss_train:{:.4f}, total_loss_d_train:{:.4f}>".format(
+        message = "<epoch:{:d}, step:{:d}, <total_loss_g_train:{:.4f}, recon_loss_train:{:.4f}, adversarial_loss_train:{:.4f}, feature_loss_train:{:.4f}, commit_loss_train:{:.4f}, w_loss_d_train:{:.4f}, loss_d_train:{:.4f}>".format(
             epoch,
             global_step,
             train_loss_g / len(train_loader),
@@ -590,6 +637,7 @@ def train(
             train_adv_g_loss / len(train_loader),
             train_feat_loss / len(train_loader),
             train_commit_loss / len(train_loader),
+            train_w_loss_d / len(train_loader),
             train_loss_d / len(train_loader),
         )
 
@@ -631,7 +679,14 @@ def train(
         )
         logger.add_scalar(
             **{
-                "tag": "total_loss_d_train/epoch",
+                "tag": "w_loss_d_train/epoch",
+                "scalar_value": train_w_loss_d / len(train_loader),
+                "global_step": epoch,
+            }
+        )
+        logger.add_scalar(
+            **{
+                "tag": "loss_d_train/epoch",
                 "scalar_value": train_loss_d / len(train_loader),
                 "global_step": epoch,
             }
@@ -643,6 +698,7 @@ def train(
             soundstream.eval()
             mfd.eval()
             valid_loss_d = 0.0
+            valid_w_loss_d = 0.0
             valid_loss_g = 0.0
             valid_commit_loss = 0.0
             valid_adv_g_loss = 0.0
@@ -680,7 +736,10 @@ def train(
                         y_df_hat_r, y_df_hat_g, fmap_f_r, fmap_f_g = mfd(
                             x_wav.contiguous().detach(), G_x.contiguous().detach()
                         )
-                        loss_d = criterion_d(y_df_hat_r, y_df_hat_g, fmap_f_r, fmap_f_g)
+                        w_loss_d, loss_d = criterion_d(
+                            y_df_hat_r, y_df_hat_g, fmap_f_r, fmap_f_g
+                        )
+                        valid_w_loss_d += w_loss_d.item()
                         valid_loss_d += loss_d.item()
 
             # if dist.get_rank() == 0:
@@ -709,7 +768,7 @@ def train(
                 )
 
             # made changes here, average out the total losses by dividing with the num_batches
-            message = "<epoch:{:d}, total_loss_g_valid:{:.4f}, recon_loss_valid:{:.4f}, adversarial_loss_valid:{:.4f}, feature_loss_valid:{:.4f}, commit_loss_valid:{:.4f}, valid_loss_d:{:.4f}, best_epoch:{:d}>".format(
+            message = "<epoch:{:d}, total_loss_g_valid:{:.4f}, recon_loss_valid:{:.4f}, adversarial_loss_valid:{:.4f}, feature_loss_valid:{:.4f}, commit_loss_valid:{:.4f}, valid_loss_d:{:.4f}, valid_w_loss_d:{:.4f}, best_epoch:{:d}>".format(
                 epoch,
                 valid_loss_g / len(valid_loader),
                 valid_rec_loss / len(valid_loader),
@@ -717,6 +776,7 @@ def train(
                 valid_feat_loss / len(valid_loader),
                 valid_commit_loss / len(valid_loader),
                 valid_loss_d / len(valid_loader),
+                valid_w_loss_d / len(valid_loader),
                 best_val_epoch,
             )
 
@@ -753,6 +813,13 @@ def train(
                 **{
                     "tag": "commit_loss_valid/epoch",
                     "scalar_value": valid_commit_loss / len(valid_loader),
+                    "global_step": epoch,
+                }
+            )
+            logger.add_scalar(
+                **{
+                    "tag": "total_w_loss_d_valid/epoch",
+                    "scalar_value": valid_w_loss_d / len(valid_loader),
                     "global_step": epoch,
                 }
             )
