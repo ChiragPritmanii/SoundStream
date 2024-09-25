@@ -326,17 +326,17 @@ def main_worker(local_rank, args):
     )
     print("Shuffle Activated")
 
-    optimizer_g = torch.optim.AdamW(soundstream.parameters(), lr=3e-4, betas=(0.5, 0.9))
+    optimizer_g = torch.optim.AdamW(soundstream.parameters(), lr=3e-4, eps=1e-6, betas=(0.8, 0.99), weight_decay = 0.01)
     lr_scheduler_g = torch.optim.lr_scheduler.ExponentialLR(optimizer_g, gamma=0.999)
-    optimizer_d = torch.optim.AdamW(mfd.parameters(), lr=3e-4, betas=(0.5, 0.9))
+    optimizer_d = torch.optim.AdamW(mfd.parameters(), lr=3e-4, eps=1e-6, betas=(0.8, 0.99), weight_decay = 0.01)
     lr_scheduler_d = torch.optim.lr_scheduler.ExponentialLR(optimizer_d, gamma=0.999)
     if args.resume:
         latest_info = torch.load(os.path.join(args.resume_path, args.resume_ckpt))
         args.st_epoch = latest_info["epoch"]
         soundstream.load_state_dict(latest_info["codec_model"], strict=False)
         mfd.load_state_dict(latest_info["mfd"])
-        if args.warm_up_disc_steps > 0:
-            soundstream.freeze_generator()
+        # if args.warm_up_disc_steps > 0:
+        #     soundstream.freeze_generator()
         # if custom_lr then use the custom set lr for both generaor and discriminator
         if args.use_custom_lr == True:
             print(f"using custom lr: {lr_scheduler_g.get_lr()[0]}")
@@ -417,15 +417,13 @@ def train(
         for x in tqdm(train_loader):
             x = x.to(args.device)
 
-            if global_step == disc_warmup_step:
-                print(f"Unfreezing the generator at {global_step}")
-                soundstream.unfreeze_generator()
-                optimizer_g = torch.optim.AdamW(
-                    soundstream.parameters(), lr=3e-4, betas=(0.5, 0.9)
-                )
-                lr_scheduler_g = torch.optim.lr_scheduler.ExponentialLR(
-                    optimizer_g, gamma=0.999
-                )
+            # if global_step == disc_warmup_step:
+            #     print(f"Unfreezing the generator at {global_step}")
+            #     soundstream.unfreeze_generator()
+            #     optimizer_g = torch.optim.AdamW(soundstream.parameters(), lr=3e-4, eps=1e-6, betas=(0.8, 0.99), weight_decay = 0.01)
+            #     lr_scheduler_g = torch.optim.lr_scheduler.ExponentialLR(
+            #         optimizer_g, gamma=0.999
+            #     )
 
             for optimizer_idx in [0, 1]:  # we have two optimizer
                 x_wav = get_input(x)
@@ -458,11 +456,13 @@ def train(
                     train_rec_loss += rec_loss.item()
 
                     # if disc_warmup is unset then it take -1 value
+                    # do not update the optim for first few steps
                     if global_step >= disc_warmup_step:
                         optimizer_g.zero_grad()  # Clear gradients for the generator optimizer
                         total_loss_g.backward()  # Backpropagate the loss
                         optimizer_g.step()  # Update generator parameters
-                        lr_scheduler_g.step()  # Step the learning rate scheduler
+                        
+                    lr_scheduler_g.step()  # Step the learning rate scheduler
                 else:
                     # update discriminator
                     # MFD
