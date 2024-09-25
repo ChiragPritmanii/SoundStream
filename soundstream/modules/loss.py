@@ -253,7 +253,7 @@ def reconstruction_loss(x, G_x, args, eps=1e-7, perceptual_weighting=True):
         n_fft_pow = range(9, 13)
     elif args.audio_type == "instrumentals":
         n_mels = 128
-        n_fft_pow = range(9, 14)
+        n_fft_pow = range(10, 14)
 
     # comparing from coarse to fine frequency resolution
     # added 2048, 4096, 8192 n_fft values too for improving frequency resolution
@@ -303,8 +303,9 @@ def reconstruction_loss(x, G_x, args, eps=1e-7, perceptual_weighting=True):
         # Alternative Approach: You might want to normalize the mel losses differently, 
         # or even avoid scaling by i. If finer frequency resolutions (higher n_fft) are crucial for your task, 
         # you could give them more weight instead of reducing their influence.
-        tot_mel_loss = (0.3*lin_mel_loss + 0.7*log_mel_loss + spec_conv_loss) / (i)
+        tot_mel_loss = (lin_mel_loss + log_mel_loss + spec_conv_loss)
         # Previous : 
+        # tot_mel_loss = (0.3*lin_mel_loss + 0.7*log_mel_loss + spec_conv_loss) / (i)
         # tot_mel_loss = (lin_mel_loss + log_mel_loss + spec_conv_loss) / (i)
 
         L += tot_mel_loss
