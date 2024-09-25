@@ -303,7 +303,7 @@ def reconstruction_loss(x, G_x, args, eps=1e-7, perceptual_weighting=True):
         # Alternative Approach: You might want to normalize the mel losses differently, 
         # or even avoid scaling by i. If finer frequency resolutions (higher n_fft) are crucial for your task, 
         # you could give them more weight instead of reducing their influence.
-        tot_mel_loss = (lin_mel_loss + log_mel_loss + spec_conv_loss)
+        tot_mel_loss = (lin_mel_loss + log_mel_loss + spec_conv_loss) / (i)
         # Previous : 
         # tot_mel_loss = (0.3*lin_mel_loss + 0.7*log_mel_loss + spec_conv_loss) / (i)
         # tot_mel_loss = (lin_mel_loss + log_mel_loss + spec_conv_loss) / (i)
