@@ -327,6 +327,10 @@ def main_worker(local_rank, args):
     )
     print("Shuffle Activated")
 
+    optimizer_g = torch.optim.AdamW(soundstream.parameters(), lr=3e-4, betas=(0.5, 0.9))
+    lr_scheduler_g = torch.optim.lr_scheduler.ExponentialLR(optimizer_g, gamma=0.999)
+    optimizer_d = torch.optim.AdamW(mfd.parameters(), lr=3e-4, betas=(0.5, 0.9))
+    lr_scheduler_d = torch.optim.lr_scheduler.ExponentialLR(optimizer_d, gamma=0.999)
     if args.resume:
         latest_info = torch.load(os.path.join(args.resume_path, args.resume_ckpt))
         args.st_epoch = latest_info["epoch"]
@@ -337,17 +341,16 @@ def main_worker(local_rank, args):
         # if custom_lr then use the custom set lr for both generaor and discriminator
         if args.use_custom_lr:
             print(f"using custom lr: {lr_scheduler_g.get_lr()}")
-            optimizer_g = torch.optim.AdamW(
-                soundstream.parameters(), lr=3e-4, betas=(0.5, 0.9)
-            )
-            lr_scheduler_g = torch.optim.lr_scheduler.ExponentialLR(
-                optimizer_g, gamma=0.999
-            )
-            optimizer_d = torch.optim.AdamW(mfd.parameters(), lr=3e-4, betas=(0.5, 0.9))
-            lr_scheduler_d = torch.optim.lr_scheduler.ExponentialLR(
-                optimizer_d, gamma=0.999
-            )
-            pass
+            # optimizer_g = torch.optim.AdamW(
+            #     soundstream.parameters(), lr=3e-4, betas=(0.5, 0.9)
+            # )
+            # lr_scheduler_g = torch.optim.lr_scheduler.ExponentialLR(
+            #     optimizer_g, gamma=0.999
+            # )
+            # optimizer_d = torch.optim.AdamW(mfd.parameters(), lr=3e-4, betas=(0.5, 0.9))
+            # lr_scheduler_d = torch.optim.lr_scheduler.ExponentialLR(
+            #     optimizer_d, gamma=0.999
+            # )
         # if not then load from state_dict
         else:
             optimizer_g.load_state_dict(latest_info["optimizer_g"])
