@@ -339,7 +339,7 @@ def main_worker(local_rank, args):
         if args.warm_up_disc_steps > 0:
             soundstream.freeze_generator()
         # if custom_lr then use the custom set lr for both generaor and discriminator
-        if args.use_custom_lr:
+        if args.use_custom_lr==True:
             print(f"using custom lr: {lr_scheduler_g.get_lr()}")
             # optimizer_g = torch.optim.AdamW(
             #     soundstream.parameters(), lr=3e-4, betas=(0.5, 0.9)
@@ -487,9 +487,9 @@ def train(
             message = "<epoch:{:d}, iter:{:d}, step:{:d}, lr_d: {:.4f}, lr_g: {:.4f}, total_loss_g:{:.4f}, adv_g_loss:{:.4f}, feat_loss:{:.4f}, rec_loss:{:.4f}, commit_loss:{:.4f}, w_loss_d:{:.4f}, loss_d:{:.4f}, d_weight: {:.4f}>".format(
                 epoch,
                 k_iter,
+                global_step,
                 lr_scheduler_d.get_last_lr()[0],
                 lr_scheduler_g.get_last_lr()[0],
-                global_step,
                 total_loss_g.item(),
                 adv_g_loss.item(),
                 feat_loss.item(),
