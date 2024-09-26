@@ -317,7 +317,7 @@ def criterion_d(y_disc_r, y_disc_gen, fmap_r_det, fmap_gen_det):
     loss = 0.0
     loss_f = feature_loss(fmap_r_det, fmap_gen_det)
     # hinge_loss varaint 
-    if y_disc_r>0:
+    if len(y_disc_r)>0:
         for i in range(len(y_disc_r)):
             loss += F.relu(1 - y_disc_r[i]).mean() + F.relu(1 + y_disc_gen[i]).mean()
         return loss / len(y_disc_gen) + 0.0 * loss_f
