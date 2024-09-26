@@ -278,7 +278,7 @@ def reconstruction_loss(x, G_x, args, eps=1e-7, perceptual_weighting=True):
 
         n_fft = 2**i
         hop_length = n_fft // 4
-        n_mels = n_fft_pow // 8 
+        n_mels = n_fft // 8 
         n_mels = n_mels if n_mels<=256 else 256
         assert n_mels <= n_fft
 
