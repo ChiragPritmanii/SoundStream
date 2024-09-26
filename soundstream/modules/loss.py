@@ -252,8 +252,8 @@ def reconstruction_loss(x, G_x, args, eps=1e-7, perceptual_weighting=True):
         n_mels = 80
         n_fft_pow = range(9, 13)
     elif args.audio_type == "instrumentals":
-        n_mels = 128
-        n_fft_pow = range(10, 14)
+        n_mels = [64, 128, 256, 256, 256]
+        n_fft_pow = range(9, 14)
 
     # comparing from coarse to fine frequency resolution
     # added 2048, 4096, 8192 n_fft values too for improving frequency resolution
@@ -278,6 +278,8 @@ def reconstruction_loss(x, G_x, args, eps=1e-7, perceptual_weighting=True):
 
         n_fft = 2**i
         hop_length = n_fft // 4
+        n_mels = n_fft_pow // 8 
+        n_mels = n_mels if n_mels<=256 else 256
         assert n_mels <= n_fft
 
         melspec = MelSpectrogram(
